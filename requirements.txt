@@ -1,0 +1,12 @@
+python-telegram-bot>=20.0
+SQLAlchemy>=2.0
+aiosqlite
+python-dotenv
+tinkoff-api
+pandas
+numpy
+matplotlib
+tabulate
+nest_asyncio
+redis>=4.3.4  # ИЛИ 2.25.1
+redis==4.5.5

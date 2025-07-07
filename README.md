@@ -178,3 +178,32 @@ async def backtest(update, context):
 
 **Аудит проведён: 2024-06-08.**
 Senior Python Developer
+
+---
+
+## Внесённые изменения (2024-06-08)
+
+1. **SQL-инъекции**
+   - В проекте используется SQLAlchemy ORM и асинхронные сессии, что защищает от SQL-инъекций. Прямых небезопасных SQL-запросов не обнаружено.
+
+2. **Rate-limiting**
+   - Добавлен декоратор `@rate_limit()` (см. `utils/rate_limit.py`).
+   - Декоратор применён ко всем основным хендлерам (`handlers/common.py`, `handlers/portfolio.py`, `handlers/quotes.py`, `handlers/backtest.py`, `handlers/strategy.py`).
+   - Теперь каждый пользователь может вызывать команды не чаще, чем раз в 0.5 секунды.
+
+3. **Миграция на RedisStorage**
+   - Добавлен модуль `utils/redis_storage.py` с примером асинхронного хранения пользовательских данных в Redis.
+   - В `requirements.txt` добавлен пакет `aioredis`.
+   - Для полноценной FSM-интеграции потребуется доработка логики состояний.
+
+---
+
+## Архитектура
+- Фреймворк: python-telegram-bot v20.7
+- Хранилище состояний: Redis через кастомный Persistence (utils/ptb_persistence.py)
+
+## Зависимости
+- Требуется установленный Redis server 6.2+
+- Python-библиотеки: `redis>=4.5.0`
+
+---

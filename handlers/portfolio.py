@@ -4,7 +4,9 @@ from tinkoff_api.accounts import get_or_create_sandbox_account
 from tinkoff_api.client import TinkoffClient
 from utils.formatters import format_portfolio
 from config import USE_SANDBOX, PRIMARY_ACCOUNT_ID
+from utils.rate_limit import rate_limit
 
+@rate_limit()
 async def portfolio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if USE_SANDBOX:
         account_id = await get_or_create_sandbox_account()
