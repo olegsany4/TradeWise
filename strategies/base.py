@@ -1,7 +1,12 @@
-import pandas as pd
+import pandas as pd  # Добавить в начало файла
 
-class Strategy:
-    def calculate_signal(self, df: pd.DataFrame) -> str:
-        raise NotImplementedError
+class BaseStrategy:
+    """Базовый класс для торговых стратегий"""
+    
     def backtest(self, df: pd.DataFrame) -> dict:
-        raise NotImplementedError
+        """Базовый метод для бэктестирования (должен быть переопределен)"""
+        raise NotImplementedError("Метод backtest должен быть реализован в дочерних классах")
+    
+    def __str__(self):
+        """Строковое представление стратегии"""
+        return self.__class__.__name__

@@ -1,16 +1,27 @@
 import pandas as pd
-from .base import Strategy
+import numpy as np
+from .base import BaseStrategy
 
-class MovingAverageStrategy(Strategy):
+class MovingAverageStrategy(BaseStrategy):
+    """Стратегия на основе скользящих средних"""
+    
     def __init__(self, window: int = 20):
         self.window = window
-    def calculate_signal(self, df: pd.DataFrame) -> str:
-        df['MA'] = df['close'].rolling(self.window).mean()
-        if df['close'].iloc[-1] > df['MA'].iloc[-1]:
-            return "BUY"
-        return "SELL"
+        
     def backtest(self, df: pd.DataFrame) -> dict:
-        df['MA'] = df['close'].rolling(self.window).mean()
-        df['signal'] = (df['close'] > df['MA']).astype(int)
-        df['equity_curve'] = df['signal'].cumsum()
-        return df
+        # Реализация бэктеста
+        df['ma'] = df['close'].rolling(self.window).mean()
+        df['signal'] = np.where(df['close'] > df['ma'], 1, 0)
+        df['position'] = df['signal'].shift(1)
+        
+        df['returns'] = df['close'].pct_change() * df['position']
+        df['equity'] = (1 + df['returns']).cumprod()
+        
+        return {
+            'returns': df['returns'].sum(),
+            'equity_curve': df['equity'],
+            'signals': df[['close', 'ma', 'signal', 'position']]
+        }
+    
+    def __str__(self):
+        return f"Moving Average (window={self.window})"
