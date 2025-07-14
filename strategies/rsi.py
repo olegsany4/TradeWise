@@ -34,37 +34,30 @@ class RSIStrategy(BaseStrategy):
         rs = avg_gain / avg_loss
         return 100 - (100 / (1 + rs))
     
-    def backtest(self, df: pd.DataFrame) -> dict:
-        """Запуск бэктеста на исторических данных"""
-        # Рассчитываем RSI
+    def calculate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = df.copy()
         df['rsi'] = self.calculate_rsi(df)
-        
-        # Генерируем сигналы
+
         df['signal'] = 0
-        df['position'] = 0
-        
-        # Условия для покупки
         buy_condition = (
-            (df['rsi'] < self.oversold) & 
+            (df['rsi'] < self.oversold) &
             (df['rsi'].shift(1) < df['rsi'])
         )
-        
-        # Условия для продажи
         sell_condition = (
-            (df['rsi'] > self.overbought) & 
+            (df['rsi'] > self.overbought) &
             (df['rsi'].shift(1) > df['rsi'])
         )
-        
         df.loc[buy_condition, 'signal'] = 1
         df.loc[sell_condition, 'signal'] = -1
-        
-        # Рассчитываем позиции
         df['position'] = df['signal'].replace(0, method='ffill').fillna(0)
-        
-        # Рассчитываем доходность
-        df['returns'] = df['close'].pct_change() * df['position'].shift(1)
+        return df
+
+    def backtest(self, df: pd.DataFrame) -> dict:
+        """Запуск бэктеста на исторических данных."""
+        df = self.calculate_signals(df)
+        df['returns'] = df['close'].pct_change().fillna(0) * df['position'].shift(1)
         df['equity'] = (1 + df['returns']).cumprod()
-        
+
         return {
             'returns': df['returns'].sum(),
             'equity_curve': df['equity'],

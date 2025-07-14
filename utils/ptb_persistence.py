@@ -21,7 +21,7 @@ class RedisPersistence(BasePersistence):
 
     async def update_chat_data(self, chat_id: int, data: Dict) -> None:
         chat_data = await self.get_chat_data()
-        chat_data[chat_id] = data
+        chat_data[str(chat_id)] = data
         await self.redis.set("chat_data", pickle.dumps(chat_data))
 
     async def get_user_data(self) -> Dict[int, Any]:
@@ -30,7 +30,7 @@ class RedisPersistence(BasePersistence):
 
     async def update_user_data(self, user_id: int, data: Dict) -> None:
         user_data = await self.get_user_data()
-        user_data[user_id] = data
+        user_data[str(user_id)] = data
         await self.redis.set("user_data", pickle.dumps(user_data))
 
     async def get_bot_data(self) -> Dict[str, Any]:

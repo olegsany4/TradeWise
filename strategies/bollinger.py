@@ -27,31 +27,22 @@ class BollingerBandsStrategy(BaseStrategy):
         df['lower'] = df['sma'] - (df['std'] * self.deviation)
         return df
     
-    def backtest(self, df: pd.DataFrame) -> dict:
-        """Запуск бэктеста на исторических данных"""
-        # Рассчитываем полосы
-        df = self.calculate_bands(df)
-        
-        # Генерируем сигналы
+    def calculate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = self.calculate_bands(df.copy())
         df['signal'] = 0
-        df['position'] = 0
-        
-        # Условия для покупки (цена ниже нижней полосы)
         buy_condition = df['close'] < df['lower']
-        
-        # Условия для продажи (цена выше верхней полосы)
         sell_condition = df['close'] > df['upper']
-        
         df.loc[buy_condition, 'signal'] = 1
         df.loc[sell_condition, 'signal'] = -1
-        
-        # Рассчитываем позиции
         df['position'] = df['signal'].replace(0, method='ffill').fillna(0)
-        
-        # Рассчитываем доходность
-        df['returns'] = df['close'].pct_change() * df['position'].shift(1)
+        return df
+
+    def backtest(self, df: pd.DataFrame) -> dict:
+        """Запуск бэктеста на исторических данных."""
+        df = self.calculate_signals(df)
+        df['returns'] = df['close'].pct_change().fillna(0) * df['position'].shift(1)
         df['equity'] = (1 + df['returns']).cumprod()
-        
+
         return {
             'returns': df['returns'].sum(),
             'equity_curve': df['equity'],
