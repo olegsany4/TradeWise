@@ -79,7 +79,10 @@ application.add_handler(candles_conv_handler)
 
 # FSM для стратегий
 conv_handler = ConversationHandler(
-    entry_points=[CommandHandler('strategy', strategy)],
+    entry_points=[
+        CommandHandler('strategy', strategy),
+        CallbackQueryHandler(strategy, pattern='^strategy$'),
+    ],
     states={
         SELECT_STRATEGY: [
             CallbackQueryHandler(strategy_selection, pattern='^(MA|RSI|Bollinger)$')
@@ -122,9 +125,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text = format_portfolio(portfolio_data)
             await query.edit_message_text(text)
             
-        elif query.data == "strategy":
-            await strategy(update, context)
-            
         elif query.data == "backtest":
             await backtest(update, context)
             
@@ -144,9 +144,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         elif query.data == "refresh_portfolio":
             await portfolio(update, context)
-            
-        elif query.data == "launch_strategy":
-            await strategy(update, context)
             
         elif query.data == "show_forest":
             await query.edit_message_text("🌲 Ваш лес: 1 дерево! (геймификация)")
