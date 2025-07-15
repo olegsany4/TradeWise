@@ -6,9 +6,9 @@ from strategies.bollinger import BollingerBandsStrategy
 from utils.mocks import generate_mock_candles
 from utils.rate_limit import rate_limit
 from utils.logger import log_action
+from utils.backtesting import plot_backtest
 import asyncio
 import matplotlib
-import matplotlib.pyplot as plt
 import io
 from concurrent.futures import ThreadPoolExecutor
 
@@ -16,18 +16,9 @@ from concurrent.futures import ThreadPoolExecutor
 matplotlib.use('Agg')
 
 def plot_equity_curve(results):
-    """Синхронная функция построения графика"""
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.plot(results['equity_curve'], label='Equity')
-    ax.set_title('Backtest Results')
-    ax.set_xlabel('Period')
-    ax.set_ylabel('Value')
-    ax.legend()
-    ax.grid(True)
-    
+    """Синхронная функция построения графика."""
     buf = io.BytesIO()
-    fig.savefig(buf, format='png', dpi=100)
-    plt.close(fig)
+    plot_backtest(results, output=buf)
     buf.seek(0)
     return buf
 
