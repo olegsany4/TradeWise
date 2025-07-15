@@ -28,8 +28,9 @@ STRATEGIES = {
 
 @rate_limit()
 async def strategy(update: Update, context: ContextTypes.DEFAULT_TYPE, cancel: bool = False):
+    message = update.effective_message
     if cancel:
-        await update.message.reply_text("❌ Настройка стратегии отменена")
+        await message.reply_text("❌ Настройка стратегии отменена")
         return ConversationHandler.END
         
     await log_action("strategy_command", "User requested strategy selection", update.effective_user.id)
@@ -42,7 +43,7 @@ async def strategy(update: Update, context: ContextTypes.DEFAULT_TYPE, cancel: b
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    await update.message.reply_text(
+    await message.reply_text(
         "📊 Выберите торговую стратегию:",
         reply_markup=reply_markup
     )
@@ -98,7 +99,7 @@ async def strategy_configuration(update: Update, context: ContextTypes.DEFAULT_T
         
         # Форматируем подтверждение
         formatted_params = format_strategy_params(params)
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             f"✅ Стратегия {strategy_info['name']} настроена:\n\n"
             f"{formatted_params}\n\n"
             f"Используйте /backtest для тестирования"
@@ -114,7 +115,7 @@ async def strategy_configuration(update: Update, context: ContextTypes.DEFAULT_T
         
     except Exception as e:
         logger.error(f"Strategy config error: {e}")
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             "❌ Ошибка в формате параметров. Попробуйте еще раз или введите /cancel"
         )
         return CONFIGURE_STRATEGY
