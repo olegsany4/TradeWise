@@ -1,4 +1,207 @@
-# Технический аудит Telegram-бота TradeWise
+# Project Technical Audit
+
+## 🔧 Stack
+- Python 3.11, python-telegram-bot 20.7, SQLAlchemy (async), Tinkoff Invest API
+- Pandas, Numpy, Matplotlib, Tabulate
+- Redis (rate-limit, FSM), Sentry (error logging)
+- Docker (рекомендуется), GitHub Actions (рекомендуется)
+- Асинхронность, модульная архитектура, ConversationHandler (FSM)
+
+## 📁 Архитектура
+
+```
+TradeWise/
+├── main.py                # Точка входа, регистрация хендлеров
+├── config.py              # Конфиги и переменные окружения
+├── handlers/              # Telegram-команды
+│   ├── common.py
+│   ├── portfolio.py
+│   ├── quotes.py
+│   ├── backtest.py
+│   └── strategy.py
+├── db/                    # Модели и инициализация БД
+│   ├── models.py
+│   └── init_db.py
+├── tinkoff_api/           # Интеграция с Tinkoff Invest API
+│   ├── service.py
+│   ├── accounts.py
+│   ├── client.py
+│   ├── instruments.py
+│   ├── historical.py
+│   ├── orders.py
+│   └── utils.py
+├── strategies/            # Торговые стратегии
+│   ├── base.py
+│   └── ma.py
+├── utils/                 # Вспомогательные утилиты
+│   ├── formatters.py
+│   ├── decorators.py
+│   └── mocks.py
+├── tests/                 # Тесты (минимально)
+│   └── test_ptb_persistence.py
+```
+
+- **Модульность**: handlers, utils, db, tinkoff_api, strategies — разделены корректно.
+- **FSM**: ConversationHandler, RedisPersistence для хранения состояний.
+- **DI-контейнер**: отсутствует, но архитектура позволяет внедрить.
+- **Паттерны**: декораторы, абстракции API, сервис-слой.
+- **Конфигурация**: config.py, .env, переменные окружения.
+
+## 🚨 Проблемы и технический долг
+
+1. **FSM и хранение состояний**
+   - Не все сценарии покрыты FSM, нет полноценного workflow для сложных диалогов.
+   - RedisPersistence реализован, но не все хендлеры используют FSM.
+   - **handlers/strategy.py, main.py**
+
+2. **Rate-limiting и антифлуд**
+   - Реализован через Redis, но не покрывает все потенциальные точки входа.
+   - **utils/rate_limit.py**
+
+3. **Централизованный error handler**
+   - Глобальный обработчик ошибок есть, интеграция с Sentry.
+   - **utils/error_handlers.py**
+
+4. **Валидация пользовательского ввода**
+   - Валидация реализована частично, требуется расширить (например, для параметров стратегий).
+   - **utils/validators.py, handlers/strategy.py**
+
+5. **Потенциальные блокирующие вызовы**
+   - Matplotlib и тяжелые вычисления не всегда offload-ятся в thread pool.
+   - **handlers/backtest.py**
+
+6. **Нет тестов и CI/CD**
+   - Минимальные тесты, отсутствует пайплайн.
+   - **tests/**
+
+7. **Нет контейнеризации**
+   - Dockerfile отсутствует, запуск только локально.
+
+## 💪 Сильные стороны
+- Чистая модульная архитектура, разделение по слоям (handlers, db, utils, strategies, tinkoff_api).
+- Асинхронность, использование Redis для rate-limit и FSM.
+- Абстракция над Tinkoff Invest API (tinkoff_api/client.py).
+- Расширяемая система стратегий (strategies/base.py, ma.py, rsi.py, bollinger.py).
+- Универсальные форматтеры и декораторы.
+- Глобальный error handler, интеграция с Sentry.
+
+## 🛡️ Уязвимости и проблемные места
+- Нет полноценной валидации пользовательского ввода (handlers/strategy.py, utils/validators.py).
+- Возможны блокирующие вызовы matplotlib (handlers/backtest.py).
+- Не все команды покрыты rate-limit.
+- Нет тестов, CI/CD, Docker.
+- Нет миграций БД (Alembic).
+
+## 📝 Рекомендации и roadmap
+
+### Приоритеты и сложности
+| Задача                                 | Приоритет | Сложность |
+|----------------------------------------|-----------|-----------|
+| Внедрение полноценного FSM             | high      | medium    |
+| Расширить валидацию пользовательского ввода | high      | low       |
+| Покрытие тестами (pytest)              | high      | medium    |
+| Внедрение CI/CD (GitHub Actions)       | medium    | medium    |
+| Контейнеризация (Docker)               | medium    | medium    |
+| Миграция на PostgreSQL + Alembic       | medium    | high      |
+| Offload тяжелых задач (Celery, ThreadPool) | medium    | medium    |
+| Кэширование (Redis)                    | low       | low       |
+
+### Roadmap 30/60/90 дней
+
+#### 30 дней
+- Внедрить полноценный FSM для сложных сценариев (опросы, wizard)
+- Расширить валидацию пользовательского ввода (utils/validators.py, handlers/strategy.py)
+- Покрыть основные модули тестами (pytest)
+
+#### 60 дней
+- Внедрить CI/CD (GitHub Actions)
+- Добавить Dockerfile и docker-compose для локального и продакшн запуска
+- Вынести тяжелые вычисления (бэктесты) в Celery/ThreadPool
+- Внедрить кэширование (Redis)
+
+#### 90 дней
+- Миграция с SQLite на PostgreSQL, внедрение Alembic для миграций
+- Расширить тесты (интеграционные, e2e)
+- Внедрить мониторинг (Sentry, Prometheus)
+- Подготовить админ-панель для управления пользователями и логами
+
+### Альтернативы
+- Вместо SQLite использовать PostgreSQL для продакшн
+- Вместо ручного rate-limit — готовые решения (aioratelimit, redis-rate-limit)
+- Вместо polling — webhooks для продакшн
+- Вместо ручного FSM — FSMContext из PTB или aiogram
+
+## 🧩 Сниппеты для улучшения
+
+### FSM (python-telegram-bot)
+```python
+from telegram.ext import ConversationHandler
+conv_handler = ConversationHandler(
+    entry_points=[CommandHandler('strategy', strategy_start)],
+    states={
+        CHOOSING: [MessageHandler(filters.TEXT, choose_strategy)],
+        CONFIGURING: [MessageHandler(filters.TEXT, configure_strategy)],
+    },
+    fallbacks=[CommandHandler('cancel', cancel)]
+)
+app.add_handler(conv_handler)
+```
+
+### Rate-limiting декоратор
+```python
+import time
+from functools import wraps
+RATE_LIMIT = {}
+def rate_limit(seconds=2):
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(update, context, *args, **kwargs):
+            user_id = update.effective_user.id
+            now = time.time()
+            if user_id in RATE_LIMIT and now - RATE_LIMIT[user_id] < seconds:
+                await update.message.reply_text('Слишком часто!')
+                return
+            RATE_LIMIT[user_id] = now
+            return await func(update, context, *args, **kwargs)
+        return wrapper
+    return decorator
+```
+
+### Асинхронный offload matplotlib
+```python
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+
+def plot_equity_curve(results):
+    import matplotlib.pyplot as plt
+    import io
+    fig, ax = plt.subplots()
+    ax.plot(results['equity_curve'])
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png')
+    buf.seek(0)
+    return buf
+
+async def backtest(update, context):
+    ...
+    loop = asyncio.get_running_loop()
+    with ThreadPoolExecutor() as pool:
+        buf = await loop.run_in_executor(pool, plot_equity_curve, results)
+    await update.message.reply_photo(buf, caption="Результаты бэктеста")
+```
+
+---
+
+## Логирование
+- Все ключевые действия пользователя логируются как в консоль (терминал), так и в базу данных (таблица `action_logs`).
+- Для логирования используется утилита `utils/logger.py`.
+- Пример логируемых событий: запуск бота, запрос портфеля, котировок, бэктеста, стратегий.
+
+---
+
+**Аудит проведён: 2024-07-11.**
+Senior Python Developer
+
 
 ## 1. Технологический стек
 - **Библиотеки**:

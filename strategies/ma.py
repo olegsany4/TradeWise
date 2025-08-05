@@ -1,27 +1,26 @@
 import pandas as pd
-import numpy as np
-from .base import BaseStrategy
+from .base import Strategy
 
-class MovingAverageStrategy(BaseStrategy):
-    """Стратегия на основе скользящих средних"""
-    
-    def __init__(self, window: int = 20):
-        self.window = window
+class MovingAverageStrategy(Strategy):
+    def __init__(self, short_window: int = 10, long_window: int = 50):
+        self.short_window = short_window
+        self.long_window = long_window
+
+    def calculate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = df.copy()
         
-    def backtest(self, df: pd.DataFrame) -> dict:
-        # Реализация бэктеста
-        df['ma'] = df['close'].rolling(self.window).mean()
-        df['signal'] = np.where(df['close'] > df['ma'], 1, 0)
-        df['position'] = df['signal'].shift(1)
+        # Рассчитываем скользящие средние с min_periods=1
+        df['short_ma'] = df['close'].rolling(window=self.short_window, min_periods=1).mean()
+        df['long_ma'] = df['close'].rolling(window=self.long_window, min_periods=1).mean()
         
-        df['returns'] = df['close'].pct_change() * df['position']
-        df['equity'] = (1 + df['returns']).cumprod()
+        # Создаем сигналы
+        df['signal'] = 'HOLD'
         
-        return {
-            'returns': df['returns'].sum(),
-            'equity_curve': df['equity'],
-            'signals': df[['close', 'ma', 'signal', 'position']]
-        }
-    
-    def __str__(self):
-        return f"Moving Average (window={self.window})"
+        # Условия пересечения (а не просто сравнения)
+        buy_condition = (df['short_ma'] > df['long_ma']) & (df['short_ma'].shift(1) <= df['long_ma'].shift(1))
+        sell_condition = (df['short_ma'] < df['long_ma']) & (df['short_ma'].shift(1) >= df['long_ma'].shift(1))
+        
+        df.loc[buy_condition, 'signal'] = 'BUY'
+        df.loc[sell_condition, 'signal'] = 'SELL'
+        
+        return df[['signal']]

@@ -1,62 +1,41 @@
 import pandas as pd
 import numpy as np
-from .base import BaseStrategy
+from .base import Strategy
 
-class BollingerBandsStrategy(BaseStrategy):
-    """
-    Стратегия на основе полос Боллинджера
-    
-    Правила:
-    - Покупаем, когда цена закрывается ниже нижней полосы
-    - Продаем, когда цена закрывается выше верхней полосы
-    
-    Параметры:
-    - period: период для скользящей средней (по умолчанию 20)
-    - deviation: количество стандартных отклонений (по умолчанию 2.0)
-    """
-    
+class BollingerStrategy(Strategy):  # Изменено имя класса
+    """Стратегия на основе полос Боллинджера."""
+
     def __init__(self, period: int = 20, deviation: float = 2.0):
         self.period = period
         self.deviation = deviation
-        
+
     def calculate_bands(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Расчет полос Боллинджера"""
+        # Рассчитываем среднюю скользящую
         df['sma'] = df['close'].rolling(self.period).mean()
+        # Рассчитываем стандартное отклонение
         df['std'] = df['close'].rolling(self.period).std()
+        # Рассчитываем верхнюю и нижнюю полосы
         df['upper'] = df['sma'] + (df['std'] * self.deviation)
         df['lower'] = df['sma'] - (df['std'] * self.deviation)
         return df
-    
-    def backtest(self, df: pd.DataFrame) -> dict:
-        """Запуск бэктеста на исторических данных"""
-        # Рассчитываем полосы
+
+    def calculate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
+        # Рассчитываем полосы Боллинджера
         df = self.calculate_bands(df)
         
-        # Генерируем сигналы
-        df['signal'] = 0
-        df['position'] = 0
+        # Создаем DataFrame для сигналов
+        signals = pd.DataFrame(index=df.index, columns=['signal'])
+        signals['signal'] = 'HOLD'  # Значение по умолчанию
         
-        # Условия для покупки (цена ниже нижней полосы)
+        # Определяем условия для сигналов
         buy_condition = df['close'] < df['lower']
-        
-        # Условия для продажи (цена выше верхней полосы)
         sell_condition = df['close'] > df['upper']
         
-        df.loc[buy_condition, 'signal'] = 1
-        df.loc[sell_condition, 'signal'] = -1
+        # Присваиваем сигналы BUY и SELL
+        signals.loc[buy_condition, 'signal'] = 'BUY'
+        signals.loc[sell_condition, 'signal'] = 'SELL'
         
-        # Рассчитываем позиции
-        df['position'] = df['signal'].replace(0, method='ffill').fillna(0)
-        
-        # Рассчитываем доходность
-        df['returns'] = df['close'].pct_change() * df['position'].shift(1)
-        df['equity'] = (1 + df['returns']).cumprod()
-        
-        return {
-            'returns': df['returns'].sum(),
-            'equity_curve': df['equity'],
-            'signals': df[['close', 'sma', 'upper', 'lower', 'signal', 'position']]
-        }
-    
-    def __str__(self):
+        return signals
+
+    def __str__(self) -> str:
         return f"Bollinger Bands (period={self.period}, deviation={self.deviation})"
