@@ -1,7 +1,7 @@
 import sys
 import logging
 import matplotlib
-matplotlib.use('Agg')  # Устанавливаем неинтерактивный бэкенд
+matplotlib.use('Agg')  # Устанавливаем неинтерактивный бэкенд для matplotlib
 
 from functools import partial
 from redis.asyncio import Redis
@@ -58,7 +58,7 @@ redis = Redis(
 )
 persistence = RedisPersistence(redis)
 
-# Создание приложения
+# Создание приложения Telegram
 application = ApplicationBuilder() \
     .token(TELEGRAM_TOKEN) \
     .persistence(persistence) \
@@ -70,7 +70,9 @@ async def strategy_callback_wrapper(update: Update, context: ContextTypes.DEFAUL
     await query.answer()
     return await strategy(update, context)
 
-# Регистрация обработчиков команд
+# ================================================
+# РЕГИСТРАЦИЯ ОСНОВНЫХ ОБРАБОТЧИКОВ КОМАНД
+# ================================================
 application.add_handler(CommandHandler("start", start))
 application.add_handler(CommandHandler("portfolio", portfolio))
 application.add_handler(CommandHandler("quotes", quotes))
@@ -79,7 +81,9 @@ application.add_handler(CommandHandler("order", create_order))
 application.add_handler(CommandHandler("orders", list_orders))
 application.add_handler(CommandHandler("cancelorder", cancel_order))
 
-# FSM для стратегий
+# ================================================
+# FSM ДЛЯ УПРАВЛЕНИЯ СТРАТЕГИЯМИ
+# ================================================
 strategy_conv_handler = ConversationHandler(
     entry_points=[
         CommandHandler('strategy', strategy),
@@ -100,7 +104,9 @@ strategy_conv_handler = ConversationHandler(
 )
 application.add_handler(strategy_conv_handler)
 
-# FSM для бэктеста
+# ================================================
+# FSM ДЛЯ БЭКТЕСТИНГА
+# ================================================
 backtest_conv_handler = ConversationHandler(
     entry_points=[
         CommandHandler('backtest', backtest_command),
@@ -117,126 +123,137 @@ backtest_conv_handler = ConversationHandler(
 )
 application.add_handler(backtest_conv_handler)
 
-# ConversationHandler для свечей
+# ConversationHandler для работы со свечными данными
 application.add_handler(candles_conv_handler)
 
-# Обработчик ошибок
+# Глобальный обработчик ошибок
 application.add_error_handler(global_error_handler)
 
-# Обработчик кнопок с правильным использованием rate_limit
+# ================================================
+# ГЛОБАЛЬНЫЙ ОБРАБОТЧИК INLINE-КНОПОК
+# ================================================
 @rate_limit()
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     try:
-        logger.debug(f"Received callback: {query.data}")
+        logger.debug(f"Получен callback: {query.data}")
         
-        # Пропускаем кнопку "strategy" (обрабатывается в ConversationHandler)
-        if query.data == "strategy":
-            logger.debug(f"Skipping strategy button: {query.data}")
+        # Пропускаем кнопки, которые обрабатываются в ConversationHandler
+        skip_patterns = [
+            "strategy", "MA", "RSI", "Bollinger",
+            "candles_ticker_.*", "candles_interval_.*",
+            "backtest", "30", "60", "90", "cancel_backtest"
+        ]
+        
+        if any(query.data.startswith(p.split('*')[0]) for p in skip_patterns):
+            logger.debug(f"Пропускаем обработку кнопки: {query.data}")
             return
             
-        # Пропускаем кнопки стратегий (MA, RSI, Bollinger)
-        if query.data in ["MA", "RSI", "Bollinger"]:
-            logger.debug(f"Skipping strategy button: {query.data}")
-            return
-            
-        # Пропускаем кнопки свечей
-        if query.data.startswith(("candles_ticker_", "candles_interval_")):
-            logger.debug(f"Skipping candles button: {query.data}")
-            return
-
-        # Пропускаем кнопки бэктеста
-        if query.data in ["backtest", "30", "60", "90", "cancel_backtest"]:
-            logger.debug(f"Skipping backtest button: {query.data}")
-            return
-
         # Обработка кнопки "show_graph"
         if query.data == "show_graph":
-            logger.debug("Handling show_graph request")
+            logger.debug("Обработка запроса show_graph")
             await show_backtest_graph(update, context)
             return
 
         # Обработка кнопки "activate_real"
         if query.data == "activate_real":
-            logger.debug("Handling activate_real request")
+            logger.debug("Обработка запроса activate_real")
             await query.edit_message_text("🚀 Режим реальной торговли будет доступен в следующем обновлении!")
             return
 
-        # Остальная обработка кнопок...
+        # Обработка кнопки "balance"
         if query.data == "balance":
-            logger.debug("Handling balance request")
+            logger.debug("Обработка запроса баланса")
             account_id = await get_or_create_sandbox_account() if USE_SANDBOX else PRIMARY_ACCOUNT_ID
             client = TinkoffClient(sandbox=USE_SANDBOX)
             portfolio_data = await client.get_portfolio(account_id)
-            text = format_balance(portfolio_data)
+            # Передаем флаг песочницы в форматирование
+            text = format_balance(portfolio_data, is_sandbox=USE_SANDBOX)
             await query.edit_message_text(text)
 
+        # Обработка кнопки "portfolio"
         elif query.data == "portfolio":
-            logger.debug("Handling portfolio request")
+            logger.debug("Обработка запроса портфеля")
             account_id = await get_or_create_sandbox_account() if USE_SANDBOX else PRIMARY_ACCOUNT_ID
             client = TinkoffClient(sandbox=USE_SANDBOX)
             portfolio_data = await client.get_portfolio(account_id)
             text = format_portfolio(portfolio_data)
             await query.edit_message_text(text)
 
+        # Обработка кнопки "orders"
         elif query.data == "orders":
-            logger.debug("Handling orders request")
+            logger.debug("Обработка запроса ордеров")
             await list_orders(update, context)
 
+        # Обработка кнопки "api_orders"
         elif query.data == "api_orders":
-            logger.debug("Handling api_orders request")
+            logger.debug("Обработка запроса API-ордеров")
             account_id = await get_or_create_sandbox_account() if USE_SANDBOX else PRIMARY_ACCOUNT_ID
             client = TinkoffClient(sandbox=USE_SANDBOX)
             active_orders, executed_orders = await client.get_orders(account_id)
             text = format_orders(active_orders, executed_orders)
             await query.edit_message_text(text)
 
+        # Обработка кнопок отмены ордеров
         elif query.data.startswith("cancel_"):
-            logger.debug(f"Handling cancel request: {query.data}")
+            logger.debug(f"Обработка запроса отмены ордера: {query.data}")
             order_id = int(query.data.split("_")[1])
             await cancel_order_button(update, context, order_id)
 
+        # Обработка кнопки "refresh_portfolio"
         elif query.data == "refresh_portfolio":
-            logger.debug("Handling refresh_portfolio request")
+            logger.debug("Обработка запроса обновления портфеля")
             await portfolio(update, context)
 
+        # Обработка кнопки "launch_strategy"
         elif query.data == "launch_strategy":
-            logger.debug("Handling launch_strategy request")
+            logger.debug("Обработка запроса запуска стратегии")
             await strategy(update, context)
 
+        # Обработка кнопки "show_forest" (геймификация)
         elif query.data == "show_forest":
-            logger.debug("Handling show_forest request")
+            logger.debug("Обработка запроса показа леса")
             await query.edit_message_text("🌲 Ваш лес: 1 дерево! (геймификация)")
 
+        # Обработка кнопок обновления свечных данных
         elif query.data.startswith("rcandles_"):
-            logger.debug(f"Handling rcandles request: {query.data}")
+            logger.debug(f"Обработка запроса обновления свечей: {query.data}")
             parts = query.data.split('_')
             if len(parts) < 4:
-                logger.error(f"Invalid refresh candles format: {query.data}")
+                logger.error(f"Неверный формат запроса свечей: {query.data}")
                 await query.edit_message_text("⚠️ Ошибка формата запроса")
                 return
+                
             ticker = parts[1]
             interval = parts[2]
+            
             try:
                 days = int(parts[3])
             except (ValueError, IndexError):
-                logger.error(f"Invalid days value: {parts}")
+                logger.error(f"Некорректное значение дней: {parts}")
                 await query.edit_message_text("⚠️ Некорректное значение дней")
                 return
+                
             await query.edit_message_text(f"⏳ Обновляю данные для {ticker}...")
+            
             try:
                 historical = HistoricalData()
                 interval_enum = INTERVAL_MAPPING.get(interval)
+                
                 if not interval_enum:
                     await query.edit_message_text("❌ Неверный интервал")
                     return
+                    
                 candles_data = await historical.get_candles(ticker, interval_enum, days)
+                
                 if not candles_data:
                     await query.edit_message_text(f"❌ Не удалось получить данные для {ticker}")
                     return
+                    
                 formatted = [historical.format_candle(c) for c in candles_data]
                 text = format_candles(ticker, interval, formatted)
+                
                 keyboard = [
                     [InlineKeyboardButton(
                         "🔄 Обновить",
@@ -244,23 +261,28 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     )]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
+                
                 await query.edit_message_text(
                     text=text,
                     reply_markup=reply_markup
                 )
             except Exception as e:
-                logger.error(f"Error loading candles for {ticker}: {e}", exc_info=True)
+                logger.error(f"Ошибка загрузки свечей для {ticker}: {e}", exc_info=True)
                 await query.edit_message_text(f"⚠️ Ошибка при загрузке данных: {str(e)[:100]}")
+                
+        # Обработка неизвестных команд
         else:
-            logger.warning(f"Unknown command: {query.data}")
+            logger.warning(f"Неизвестная команда: {query.data}")
             await query.edit_message_text("Неизвестная команда.")
 
-        await log_action("button_callback", f"Handled: {query.data}", update.effective_user.id)
+        # Логирование успешной обработки
+        await log_action("button_callback", f"Обработано: {query.data}", update.effective_user.id)
+        
     except Exception as e:
-        logger.error(f"Error in button_callback: {e}", exc_info=True)
+        logger.error(f"Ошибка в обработчике кнопок: {e}", exc_info=True)
         await query.edit_message_text("⚠️ Произошла ошибка при обработке запроса")
 
-# Единственный глобальный обработчик кнопок
+# Регистрация глобального обработчика кнопок
 application.add_handler(CallbackQueryHandler(button_callback))
 
 # Запуск приложения
